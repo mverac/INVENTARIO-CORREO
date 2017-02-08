@@ -1,0 +1,148 @@
+ 
+
+mensaje = MsgBox("Se realizara un inventario de su estacion de trabajo, favor esperar mientras se ejecuta.",1321,"Bienvenido")
+Set SystemSet = GetObject("winmgmts:").InstancesOf ("Win32_OperatingSystem") 
+for each System in SystemSet 
+NombreW =  System.Caption
+FabricanteW = System.Manufacturer 
+VersionW = System.Version 
+DirW = System.WindowsDirectory 
+SerialW = System.SerialNumber 
+Next
+
+
+
+Const HKLM = &H80000002 'HKEY_LOCAL_MACHINE
+ 
+Dim arrKeys(1)
+arrKeys(0) = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
+arrKeys(1) = "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\"
+ 
+strComputer = "."
+strEntry1a = "DisplayName"
+strEntry1b = "QuietDisplayName"
+strEntry2 = "Publisher"
+strEntry3 = "InstallDate"
+strEntry4 = "EstimatedSize"
+strEntry5 = "DisplayVersion"
+ 
+'Create the output file
+Dim objShell, objShellEnv, strComputerName, objFso
+Set objShell = WScript.CreateObject("WScript.Shell")
+Set objShellEnv = objShell.Environment("Process")
+strComputerName = objShellEnv("ComputerName")
+fecha = Date()
+nombrearchivo = strComputerName & "_" & fecha
+temp = objShellEnv("USERPROFILE")
+strUser = CreateObject("WScript.Network").UserName
+Set objFso = WScript.CreateObject("Scripting.FileSystemObject")
+
+If Not objFso.FolderExists(temp & "\Inventario") Then
+Set inventario = objfso.createfolder(temp & "\Inventario")
+End If
+Set outputFile = objFso.CreateTextFile(temp & "\Inventario\" & nombrearchivo & ".csv", True)
+'===================================================================================
+ 
+Set objReg = GetObject("winmgmts://" & strComputer & "/root/default:StdRegProv")
+ 
+outputFile.Write"Nombre" & vbTab &"Empresa "& vbTab & "Fecha de Instalacion" & vbTab & "SerialW / Peso" & vbTab & "Version" & vbTab & "Nombre de Usuario" & VbCrLf
+outputFile.WriteLine NombreW & vbTab & FabricanteW & vbTab & " " & vbTab & SerialW & vbTab & VersionW & vbTab & strUser 
+For i = 0 to 1
+
+  'Verificar si existen registros.
+  intCheckKey = objReg.EnumKey(HKLM, arrKeys(i), arrSubkeys)
+ 
+  If intCheckKey = 0 Then
+    For Each strSubkey In arrSubkeys
+      intReturn = objReg.GetStringValue(HKLM, arrKeys(i) & strSubkey, strEntry1a, strValue1)
+  If intReturn <> 0 Then
+      objReg.GetStringValue HKLM, arrKeys(i) & strSubkey, strEntry1b, strValue1
+  End If
+
+      objReg.GetStringValue HKLM, arrKeys(i) & strSubkey, strEntry2, strValue2
+      objReg.GetStringValue HKLM, arrKeys(i) & strSubkey, strEntry3, strValue3
+      objReg.GetDWORDValue HKLM, arrKeys(i) & strSubkey, strEntry4, strValue4
+      objReg.GetStringValue HKLM, arrKeys(i) & strSubkey, strEntry5, strValue5
+		
+	if strValue3 <> "" then
+		yyyy = Left(strValue3,4)
+		mmm = Mid(strValue3, 5)
+		mm = Left(mmm,2)
+		dd = Mid(strValue3, 7,8 )
+    fech = yyyy & "-" & mm & "-" & dd
+	End If
+  If Instr( 1, strValue2, "Microsoft", vbTextCompare ) > 0 then 
+      outputFile.WriteLine strValue1 & vbTab & strValue2 & vbTab & fech & vbTab & strValue4 & vbTab & strValue5 & vbTab &strUser
+  End If
+  Next
+  End If
+Next
+ 
+'Cerrar el archivo creado
+outputFile.Close
+ 
+'Si quieres revisar el archivo descomentar y abrir.
+'objShell.run "notepad.exe " & strComputerName & ".txt"
+
+Set objShell = Nothing
+Set objFso = Nothing
+ 
+EmailSubject = "Inventario de Software PC: " & strComputerName & " Usuario: " &strUser&"."
+EmailBody = "El archivo fue creado en la siguiente carpeta: " & temp & "\Inventario\" & nombrearchivo & ".csv"
+
+Const EmailFrom = "QUIEN ENVIA EMAIL"
+Const EmailFromName = "NOMBRE DE QUIEN ENVIA EMAIL" 
+Const EmailTo = "DESTINATARIO"
+Const EmailTo2 = "DESTINATARIO 2"
+Const SMTPServer = "smtp.gmail.com"
+Const SMTPLogon = "CORREO A USAR"
+Const SMTPPassword = "CONTRASEÑA"
+Const SMTPSSL = True
+Const SMTPPort = 465
+
+Const cdoSendUsingPickup = 1    'Send message using local SMTP service pickup directory.
+Const cdoSendUsingPort = 2  'Send the message using SMTP over TCP/IP networking.
+Const cdoAnonymous = 0  ' No authentication
+Const cdoBasic = 1  ' BASIC clear text authentication
+Const cdoNTLM = 2   ' NTLM, Microsoft proprietary authentication
+
+' Creamos el mensaje y sus destinatarios.
+Set objMessage = CreateObject("CDO.Message")
+objMessage.Subject = EmailSubject
+objMessage.From = """" & EmailFromName & """ <" & EmailFrom & ">"
+objMessage.To = EmailTo & "," & EmailTo2
+objMessage.TextBody = EmailBody
+objMessage.Addattachment temp & "\Inventario\" & nombrearchivo & ".csv"
+
+' Agregar la configuracion del servidor.
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/sendusing") = 2
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/smtpserver") = SMTPServer
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/smtpauthenticate") = cdoBasic
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/sendusername") = SMTPLogon
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/sendpassword") = SMTPPassword
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/smtpserverport") = SMTPPort
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/smtpusessl") = SMTPSSL
+objMessage.Configuration.Fields.Item _
+("http://schemas.microsoft.com/cdo/configuration/smtpconnectiontimeout") = 60
+objMessage.Configuration.Fields.Update
+
+'Ahora enviamos el correo!
+On Error Resume Next
+objMessage.Send
+
+If Err.Number <> 0 Then
+    MsgBox Err.Description,16,"Error en la ejecucion del proceso"
+Else 
+    MsgBox "La informacion fue recopilada exitosamente !",64,"Informacion"
+End If
+
+ Set shell = wscript.CreateObject("Shell.Application")
+shell.Open(temp & "\Inventario\")
+Set shell = Nothing
